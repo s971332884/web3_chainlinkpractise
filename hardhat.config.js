@@ -2,6 +2,9 @@ require("@nomicfoundation/hardhat-toolbox");
 // require("dotenv").config()
 require("@chainlink/env-enc").config(); 
 require("./tasks")
+require("hardhat-deploy")
+require("@nomicfoundation/hardhat-ethers");
+require("hardhat-deploy-ethers");
 
 const PRIVATE_KEY =process.env.PRIVATE_KEY
 const PRIVATE_KEY2 =process.env.PRIVATE_KEY2
@@ -14,6 +17,10 @@ const SEPOLIA_URL =process.env.SEPOLIA_URL //infura
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: "0.8.28",
+  defaultNetwork:"hardhat",
+  mocha:{
+    timeout:300000
+  },
   networks:{
     sepolia:{
         url: SEPOLIA_URL,
@@ -23,5 +30,17 @@ module.exports = {
   },
   etherscan:{
     apiKey: ETHERSCAN_API_KEY
+  },
+
+  namedAccounts:{
+    firstAccount:{
+        default:0
+    },
+    secondAccount:{
+        default:1
+    }
+  },
+  gasReporter:{
+    enabled:true
   }
 }

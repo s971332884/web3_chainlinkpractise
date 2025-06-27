@@ -16,7 +16,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 contract FundMe{
     mapping(address=>uint256) public  fundersToAmount;
 
-    AggregatorV3Interface internal dataFeed;
+    AggregatorV3Interface public  dataFeed;
     address public owner;
     uint256 constant MINIMUM_VALUE = 100*10**18;//代表100美元，10**18与convertEthToUsd中的wei数量抵消
     uint256 constant TARGET = 1000*10**18;
@@ -24,17 +24,20 @@ contract FundMe{
     uint256 deploymentTimestamp;
     uint256 locktime;
 
+    event FundWithdrawbyOwner(uint256);
+    event RefundByFunder(address,uint256);
+
     address public erc20Addr;
     bool public FundSuccess=false ; 
     function fund() external payable {
         require(convertEthToUsd(msg.value)>=MINIMUM_VALUE,"Funding amount is too low");
-        require(block.timestamp<deploymentTimestamp+locktime,"Windows is closed");
+        require(block.timestamp<deploymentTimestamp+locktime,"window is closed");
         fundersToAmount[msg.sender]=msg.value;  
         FundSuccess=true;
     }
 
-    constructor(uint256 _locktime) {
-        dataFeed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
+    constructor(uint256 _locktime,address dataFeedAddr) {
+        dataFeed = AggregatorV3Interface(dataFeedAddr);
         owner= msg.sender;
         deploymentTimestamp = block.timestamp;
         locktime= _locktime;
@@ -67,18 +70,25 @@ contract FundMe{
     function getfund() external windowsclosed onlyOwner{
         require(convertEthToUsd(address(this).balance)>=TARGET,"TARGET is not reached");
         bool success;
-        (success,)=payable(msg.sender).call{value:address(this).balance}("");
+        uint256 balance= address(this).balance;//提前记录设置balance统计，因为下一步中，address(this).balance值会被转移给msg.sender
+        (success,)=payable(msg.sender).call{value:balance}("");
+        require(success,"transfer tx failed");
         fundersToAmount[msg.sender]=0;
         FundSuccess=true;
+        //emit event
+        emit FundWithdrawbyOwner(balance);
     }
     
     function refund() external windowsclosed{
-        require(convertEthToUsd(address(this).balance)<TARGET,"the balance is not reached for the TARGET");
+        require(convertEthToUsd(address(this).balance)<TARGET,"the balance is  reached for the TARGET");
         require(fundersToAmount[msg.sender]!=0,"there is no fund for you");
         bool success;
-        (success,)=payable(msg.sender).call{value:fundersToAmount[msg.sender]}("");
+        uint256 balance=fundersToAmount[msg.sender];
+        (success,)=payable(msg.sender).call{value:balance}("");
         require(success,"transfer tx failed");
         fundersToAmount[msg.sender]=0;
+        //emit event
+        emit RefundByFunder(msg.sender,balance);
     }
     
     function setFunderToAmount(address funder,uint256 amountToUpdate) external{
@@ -96,7 +106,7 @@ contract FundMe{
     }
 
     modifier windowsclosed(){
-        require(block.timestamp>=deploymentTimestamp+locktime,"Windows is closed");
+        require(block.timestamp>=deploymentTimestamp+locktime,"Windows is not closed");
         _;
     }
 
